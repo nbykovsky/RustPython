@@ -47,7 +47,7 @@ fn get_node_field_opt(
 #[derive(Debug)]
 pub(crate) struct AstNode;
 
-#[pyimpl(flags(HAS_DICT))]
+#[pyimpl(flags(BASETYPE, HAS_DICT))]
 impl AstNode {
     #[pymethod(magic)]
     fn init(zelf: PyObjectRef, args: FuncArgs, vm: &VirtualMachine) -> PyResult<()> {
