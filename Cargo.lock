@@ -1770,6 +1770,7 @@ name = "rustpython-ast"
 version = "0.1.0"
 dependencies = [
  "num-bigint",
+ "rustpython-common",
 ]
 
 [[package]]
@@ -1802,6 +1803,7 @@ dependencies = [
  "radium",
  "rand",
  "siphasher",
+ "unic-ucd-category",
  "volatile",
 ]
 

@@ -307,6 +307,8 @@ impl PyComplex {
 
     #[pymethod(magic)]
     fn repr(&self) -> String {
+        // TODO: when you fix this, move it to rustpython_common::complex::repr and update
+        //       ast/src/unparse.rs + impl Display for Constant in ast/src/constant.rs
         let Complex64 { re, im } = self.value;
         if re == 0.0 {
             format!("{}j", im)

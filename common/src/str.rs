@@ -75,6 +75,105 @@ pub fn to_ascii(value: &str) -> String {
     ascii
 }
 
+/// Get a python `repr()` of the string value. Returns None for OverflowError.
+pub fn repr(s: &str) -> Option<String> {
+    let in_len = s.len();
+    let mut out_len = 0usize;
+    // let mut max = 127;
+    let mut squote = 0;
+    let mut dquote = 0;
+
+    for ch in s.chars() {
+        let incr = match ch {
+            '\'' => {
+                squote += 1;
+                1
+            }
+            '"' => {
+                dquote += 1;
+                1
+            }
+            '\\' | '\t' | '\r' | '\n' => 2,
+            ch if ch < ' ' || ch as u32 == 0x7f => 4, // \xHH
+            ch if ch.is_ascii() => 1,
+            ch if crate::char::is_printable(ch) => {
+                // max = std::cmp::max(ch, max);
+                ch.len_utf8()
+            }
+            ch if (ch as u32) < 0x100 => 4,   // \xHH
+            ch if (ch as u32) < 0x10000 => 6, // \uHHHH
+            _ => 10,                          // \uHHHHHHHH
+        };
+        if out_len > (std::isize::MAX as usize) - incr {
+            return None;
+        }
+        out_len += incr;
+    }
+
+    let (quote, num_escaped_quotes) = choose_quotes_for_repr(squote, dquote);
+    // we'll be adding backslashes in front of the existing inner quotes
+    out_len += num_escaped_quotes;
+
+    // if we don't need to escape anything we can just copy
+    let unchanged = out_len == in_len;
+
+    // start and ending quotes
+    out_len += 2;
+
+    let mut repr = String::with_capacity(out_len);
+    repr.push(quote);
+    if unchanged {
+        repr.push_str(s);
+    } else {
+        for ch in s.chars() {
+            use std::fmt::Write;
+            match ch {
+                '\n' => repr.push_str("\\n"),
+                '\t' => repr.push_str("\\t"),
+                '\r' => repr.push_str("\\r"),
+                // these 2 branches *would* be handled below, but we shouldn't have to do a
+                // unicodedata lookup just for ascii characters
+                '\x20'..='\x7e' => {
+                    // printable ascii range
+                    if ch == quote || ch == '\\' {
+                        repr.push('\\');
+                    }
+                    repr.push(ch);
+                }
+                ch if ch.is_ascii() => {
+                    write!(repr, "\\x{:02x}", ch as u8).unwrap();
+                }
+                ch if crate::char::is_printable(ch) => {
+                    repr.push(ch);
+                }
+                '\0'..='\u{ff}' => {
+                    write!(repr, "\\x{:02x}", ch as u32).unwrap();
+                }
+                '\0'..='\u{ffff}' => {
+                    write!(repr, "\\u{:04x}", ch as u32).unwrap();
+                }
+                _ => {
+                    write!(repr, "\\U{:08x}", ch as u32).unwrap();
+                }
+            }
+        }
+    }
+    repr.push(quote);
+
+    Some(repr)
+}
+
+/// returns the outer quotes to use and the number of quotes that need to be escaped
+pub(crate) fn choose_quotes_for_repr(num_squotes: usize, num_dquotes: usize) -> (char, usize) {
+    // always use squote unless we have squotes but no dquotes
+    let use_dquote = num_squotes > 0 && num_dquotes == 0;
+    if use_dquote {
+        ('"', num_dquotes)
+    } else {
+        ('\'', num_squotes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
