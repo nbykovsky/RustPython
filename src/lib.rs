@@ -321,6 +321,9 @@ fn create_settings(matches: &ArgMatches) -> PySettings {
     };
     let ignore_environment = settings.ignore_environment || settings.isolated;
 
+    // when rustpython-vm/pylib is enabled, PySettings::default().path_list has pylib::LIB_PATH
+    let maybe_pylib = settings.path_list.pop();
+
     // add the current directory to sys.path
     settings.path_list.push("".to_owned());
 
@@ -330,8 +333,7 @@ fn create_settings(matches: &ArgMatches) -> PySettings {
             std::env::split_paths(paths).map(|path| path.into_os_string().into_string().unwrap()),
         )
     } else {
-        #[cfg(all(feature = "pylib", not(feature = "freeze-stdlib")))]
-        settings.path_list.push(pylib::LIB_PATH.to_owned());
+        settings.path_list.extend(maybe_pylib);
     }
 
     if !ignore_environment {
@@ -518,7 +520,7 @@ fn write_profile(matches: &ArgMatches) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
-fn run_rustpython(vm: &VirtualMachine, matches: &ArgMatches) -> PyResult<()> {
+fn setup_main_module(vm: &VirtualMachine) -> PyResult<Scope> {
     let scope = vm.new_scope_with_builtins();
     let main_module = vm.new_module("__main__", scope.globals.clone());
     main_module
@@ -535,6 +537,12 @@ fn run_rustpython(vm: &VirtualMachine, matches: &ArgMatches) -> PyResult<()> {
 
     vm.get_attribute(vm.sys_module.clone(), "modules")?
         .set_item("__main__", main_module, vm)?;
+
+    Ok(scope)
+}
+
+fn run_rustpython(vm: &VirtualMachine, matches: &ArgMatches) -> PyResult<()> {
+    let scope = setup_main_module(vm)?;
 
     let site_result = vm.import("site", None, 0);
 
@@ -660,7 +668,7 @@ fn run_script(vm: &VirtualMachine, scope: Scope, script_file: &str) -> PyResult<
             _run_string(vm, scope, &source, script_file.to_owned())?;
         }
         Err(err) => {
-            error!("Failed reading file '{}': {:?}", script_file, err.kind());
+            error!("Failed reading file '{}': {}", script_file, err);
             process::exit(1);
         }
     }
@@ -670,20 +678,15 @@ fn run_script(vm: &VirtualMachine, scope: Scope, script_file: &str) -> PyResult<
 #[test]
 fn test_run_script() {
     Interpreter::default().enter(|vm| {
-        // test file run
-        let r = run_script(
-            vm,
-            vm.new_scope_with_builtins(),
-            "extra_tests/snippets/dir_main/__main__.py",
-        );
-        assert!(r.is_ok());
+        vm.unwrap_pyresult((|| {
+            let scope = setup_main_module(vm)?;
+            run_script(vm, scope, "extra_tests/snippets/dir_main/__main__.py")?;
 
-        // test module run
-        let r = run_script(
-            vm,
-            vm.new_scope_with_builtins(),
-            "extra_tests/snippets/dir_main",
-        );
-        assert!(r.is_ok());
+            let scope = setup_main_module(vm)?;
+            // test module run
+            run_script(vm, scope, "extra_tests/snippets/dir_main")?;
+
+            Ok(())
+        })());
     })
 }
