@@ -1882,7 +1882,9 @@ pub fn make_module(vm: &VirtualMachine) -> PyObjectRef {
         // constants
         "AF_UNSPEC" => ctx.new_int(0),
         "AF_INET" => ctx.new_int(c::AF_INET),
+        "AF_APPLETALK" => ctx.new_int(c::AF_APPLETALK),
         "AF_INET6" => ctx.new_int(c::AF_INET6),
+        "AF_ALG" => ctx.new_int(c::AF_ALG),
         "SOCK_STREAM" => ctx.new_int(c::SOCK_STREAM),
         "SOCK_DGRAM" => ctx.new_int(c::SOCK_DGRAM),
         "SHUT_RD" => ctx.new_int(c::SHUT_RD),
